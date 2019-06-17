@@ -1,7 +1,7 @@
 // Core
 import path from 'path';
 
-import Json2csv from './example-1/Json2csv';
+import Json2csv from './example-2/Json2csv';
 
 const json2csv = new Json2csv();
 

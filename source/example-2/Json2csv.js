@@ -7,7 +7,6 @@ class Json2csv extends EventEmitter {
   constructor (props) {
     super(props);
 
-    this.manager = new Manager();
     this.files = [];
     this.#init();
   }
@@ -36,38 +35,61 @@ class Json2csv extends EventEmitter {
     this.files = this.files.map((file) => {
       const readStream = fs.createReadStream(file.path);
       const writeStream = fs.createWriteStream(file.convertedPath);
+      let streamData = '';
 
-      readStream.pipe(this.manager).on('finish', () => {
-        const data = JSON.parse(this.manager.data);
+      readStream.on('data', (chunk) => {
+        streamData += chunk.toString();
+      });
+
+      readStream.on('end', () => {
+        const data = JSON.parse(streamData);
         const headers = Object.keys(data[0]).filter(item => file.abandon.includes(item));
-        let str = '';
+        let str = this.#createCSVHeaders(headers);
 
-        headers.forEach((item, index) => {
-          if (index === headers.length - 1) {
-            str += `${item.replace(/\n/g, ' ')}\n`;
-          } else {
-            str += `${item.replace(/\n/g, ' ')};`;
-          }
-        });
-
-        data.forEach((item) => {
-          for (const key in item) {
-            if (item.hasOwnProperty(key)) {
-              if (headers.includes(key)) {
-                if (key === headers[headers.length - 1]) {
-                  str += `${('' + item[key]).replace(/\n/g, ' ')}\n`;
-                } else {
-                  str += `${('' + item[key]).replace(/\n/g, ' ')};`;
-                }
-              }
-            }
-          }
-        });
+        str += this.#addJsonData(data, headers);
 
         writeStream.write(str, 'utf-8');
         writeStream.end();
       });
+
+      file.converted = true;
+
+      return file;
     });
+  }
+
+  #createCSVHeaders (headers) {
+    let str = '';
+
+    headers.forEach((item, index) => {
+      if (index === headers.length - 1) {
+        str += `${('' + item).replace(/\n/g, ' ')}\n`;
+      } else {
+        str += `${('' + item).replace(/\n/g, ' ')};`;
+      }
+    });
+
+    return str;
+  }
+
+  #addJsonData (data, headers) {
+    let str = '';
+
+    data.forEach((item) => {
+      for (const key in item) {
+        if (item.hasOwnProperty(key)) {
+          if (headers.includes(key)) {
+            if (key === headers[headers.length - 1]) {
+              str += `${('' + item[key]).replace(/\n/g, ' ')}\n`;
+            } else {
+              str += `${('' + item[key]).replace(/\n/g, ' ')};`;
+            }
+          }
+        }
+      }
+    });
+
+    return str;
   }
 
   #getListener (pathToFind, cb) {
@@ -81,8 +103,22 @@ class Json2csv extends EventEmitter {
     cb(file);
   }
 
-  #removeListener () {
+  #removeListener (pathToFind) {
+    const file = this.files.find(({ path }) => path === pathToFind);
 
+    if (!file) {
+      this.emit('error', new Error(`No such file with path: ${pathToFind}`));
+    }
+
+    if (file.converted) {
+      fs.unlink(file.convertedPath, (error) => {
+        if (error) {
+          throw error;
+        }
+      });
+    }
+
+    this.files = this.files.filter((item) => item.path !== pathToFind);
   }
 
   #validateAbandon (abandon) {
