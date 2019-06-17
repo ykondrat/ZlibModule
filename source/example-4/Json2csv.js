@@ -3,6 +3,7 @@ import fs from 'fs';
 import { extname } from 'path';
 import { EventEmitter } from 'events';
 import zlib from 'zlib';
+import { pipeline } from 'stream';
 
 class Json2csv extends EventEmitter {
   constructor (props) {
@@ -12,10 +13,13 @@ class Json2csv extends EventEmitter {
     this.#init();
   }
 
-  add (path, abandon, archive) {
+  add (path, abandon, archive = null) {
     this.#validatePath(path);
     this.#validateAbandon(abandon);
-    this.#validateArchive(archive);
+
+    if (archive) {
+      this.#validateArchive(archive);
+    }
 
     this.files.push({
       abandon,
@@ -53,12 +57,29 @@ class Json2csv extends EventEmitter {
 
         writeStream.write(str, 'utf-8');
         writeStream.end();
+
         if (file.archive) {
-          const gzip = zlib.createGzip();
+          const { algorithm } = file.archive;
           const read = fs.createReadStream(file.convertedPath);
           const write = fs.createWriteStream(`${file.convertedPath}.gz`);
+          let zip = null;
 
-          read.pipe(gzip).pipe(write);
+          if (algorithm === 'deflate') {
+            zip = zlib.createDeflate();
+          } else {
+            zip = zlib.createGzip();
+          }
+
+          pipeline(
+            read,
+            zip,
+            write,
+            (error) => {
+              if (error) {
+                this.emit('error', error);
+              }
+            }
+          );
         }
       });
 
@@ -132,8 +153,29 @@ class Json2csv extends EventEmitter {
   }
 
   #validateArchive (archive) {
-    if (typeof archive !== 'boolean') {
-      this.emit('error', new TypeError(`archive is not a boolean`));
+    if (typeof archive !== 'object') {
+      this.emit('error', new TypeError(`archive is not a object`));
+    }
+    const { algorithm } = archive;
+    const allowedFields = [
+      'algorithm',
+    ];
+    const allowedValue = [
+      'deflate',
+      'gzip',
+    ];
+
+    if (!algorithm || typeof algorithm !== 'string' || !allowedValue.includes(algorithm)) {
+      this.emit('error', new TypeError(`algorithm does not exist or contains not a valid data type`));
+    }
+    for (const key in archive) {
+      if (Object.prototype.hasOwnProperty.call(archive, key)) {
+        const isExist = allowedFields.some(field => field === key);
+
+        if (!isExist) {
+          this.emit('error', new TypeError(`archive contains not allowed field — ${key}`));
+        }
+      }
     }
   }
 

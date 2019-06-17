@@ -1,12 +1,18 @@
 // Core
 import path from 'path';
 
-import Json2csv from './example-3/Json2csv';
+import Json2csv from './example-4/Json2csv';
 
 const json2csv = new Json2csv();
 
 // path.resolve(__dirname, './data/comments.json')
-json2csv.add(path.resolve(__dirname, './data/comments.json'), ['postId', 'name', 'body'], true);
+json2csv.add(
+  path.resolve(__dirname, './data/comments.json'),
+  ['postId', 'name', 'body'],
+  {
+    algorithm: 'deflate',
+  },
+);
 
 json2csv.on('error', (error) => {
   console.log(error);
