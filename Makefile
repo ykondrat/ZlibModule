@@ -5,7 +5,7 @@ $(NAME):
 	@echo "\033[32;01mDependencies installed  successfully!"
 
 start:
-	@npm run start source/index.js
+	@npm run start source/index2.js
 
 build:
 	@rm -rf dist
